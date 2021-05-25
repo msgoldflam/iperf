@@ -404,6 +404,10 @@ const char report_outoforder[] =
 const char report_sum_outoforder[] =
 "[SUM]%s %4.1f-%4.1f sec  %d datagrams received out-of-order\n";
 
+// MSG 
+const char report_sum_data_error_packets[] =
+"[SUM] %d datagrams failed data validation\n";
+
 const char report_peer[] =
 "[%3d] local %s port %u connected with %s port %u\n";
 

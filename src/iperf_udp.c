@@ -75,6 +75,9 @@ iperf_udp_recv(struct iperf_stream *sp)
     int       first_packet = 0;
     double    transit = 0, d = 0;
     struct iperf_time sent_time, arrival_time, temp_time;
+    unsigned char *ptrData;
+    int index;
+    char verifyErr = 0;	
 
     r = Nread(sp->socket, sp->buffer, size, Pudp);
 
@@ -85,6 +88,35 @@ iperf_udp_recv(struct iperf_stream *sp)
      */
     if (r <= 0)
         return r;
+
+
+    // MSG !!!
+    // Check for fixed data pattern that starts with zero after 3 parameters 
+    
+    if (sp->test->data_val == 1) {
+        ptrData = (unsigned char *)sp->buffer+12;
+        for (index = 0; index < (r-12); index++)
+        {
+            if (*ptrData != (unsigned char) index)
+            {            
+                verifyErr = 1;
+                iperf_err(sp->test, "Validation Error- index = %d, expected = %d, actual = %d", index, index, (int)*ptrData);
+
+                break;
+            }
+            else 
+            {
+                ptrData++;
+            }
+        }
+    }
+
+    // If the pattern verification failed, then return NO bytes received
+
+    if (verifyErr) {
+        //return 0;
+        sp->data_error++; // MSG
+    }
 
     /* Only count bytes received while we're in the correct state. */
     if (sp->test->state == TEST_RUNNING) {
@@ -215,6 +247,8 @@ iperf_udp_send(struct iperf_stream *sp)
     int r;
     int       size = sp->settings->blksize;
     struct iperf_time before;
+    unsigned char *ptrData;
+    int index;	
 
     iperf_time_now(&before);
 
@@ -246,6 +280,15 @@ iperf_udp_send(struct iperf_stream *sp)
 	memcpy(sp->buffer+4, &usec, sizeof(usec));
 	memcpy(sp->buffer+8, &pcount, sizeof(pcount));
 	
+    }
+
+   // MSG !!! Add pattern starting with ZERO after first 3 parameters
+
+    if (sp->test->data_val == 1) {
+        ptrData = (unsigned char *)sp->buffer+12;
+        for (index=0; index < (size - 12) ; index++) {
+            *ptrData++ = (unsigned char) index;
+        }
     }
 
     r = Nwrite(sp->socket, sp->buffer, size, Pudp);

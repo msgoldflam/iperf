@@ -56,11 +56,60 @@ int
 iperf_tcp_recv(struct iperf_stream *sp)
 {
     int r;
+    unsigned char *ptrData, valCheck;
+    int index;
+    char verifyErr = 0;
+    char dblErr = 0;
 
     r = Nread(sp->socket, sp->buffer, sp->settings->blksize, Ptcp);
 
     if (r < 0)
         return r;
+
+    /* MSG !!!
+     * If data validation enabled, check for incrementing data pattern
+     * The first byte is not validated; it is considered first byte of pattern
+     * Have to handle case where pattern restarts to zero at any point in bfr since back to back data blocks occur in TCP
+     */
+
+    if (sp->test->data_val == 1) {
+        ptrData = (unsigned char *)sp->buffer;
+        for (index = 0; index < r; index++) {
+            if (index == 0) {
+                // First byte is the start of pattern
+                valCheck = *ptrData + 1;
+                ptrData++;
+            }
+            else if (*ptrData != valCheck) {
+                // Pattern did not match.  Check for condition where this is start of next bfr
+                if (*ptrData == 0 && dblErr == 0) {
+
+                    // This appears to be start of next bfr, so do not fail
+                    // Set the double error flag so if next byte is also zero, we fail the validation
+                    dblErr = 1;
+                    ptrData++;
+                    valCheck = 1;
+                }         
+                else {
+                    verifyErr = 1;
+                    iperf_err(sp->test, "Validation Error- index = %d, expected = %d, actual = %d", index, valCheck, (int)*ptrData);
+                    break;
+                }
+            }
+            else {
+                // Since patterns match, clear the double error flag
+                dblErr = 0;
+                ptrData++;
+                valCheck++;
+            }
+        }
+    }
+
+    // If the pattern verification failed, then return NO bytes received
+
+    if (verifyErr) {
+        sp->data_error++; // MSG
+    }
 
     /* Only count bytes received while we're in the correct state. */
     if (sp->test->state == TEST_RUNNING) {
@@ -85,8 +134,20 @@ iperf_tcp_send(struct iperf_stream *sp)
 {
     int r;
 
+    unsigned char *ptrData;
+    int index;
+
+
     if (!sp->pending_size)
 	sp->pending_size = sp->settings->blksize;
+
+    // MSG !!! Add pattern starting with ZERO
+    if (sp->test->data_val == 1) {
+        ptrData = (unsigned char *)sp->buffer;
+        for (index=0; index < sp->pending_size ; index++) {
+            *ptrData++ = (unsigned char) index;
+        }
+    }
 
     if (sp->test->zerocopy)
 	r = Nsendfile(sp->buffer_fd, sp->socket, sp->buffer, sp->pending_size);
