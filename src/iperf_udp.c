@@ -283,14 +283,12 @@ iperf_udp_send(struct iperf_stream *sp)
     }
 
    // MSG !!! Add pattern starting with ZERO after first 3 parameters
-/** Took this out for a TEST ONLY
     if (sp->test->data_val == 1) {
         ptrData = (unsigned char *)sp->buffer+12;
         for (index=0; index < (size - 12) ; index++) {
             *ptrData++ = (unsigned char) index;
         }
     }
-**/
     r = Nwrite(sp->socket, sp->buffer, size, Pudp);
 
     if (r < 0)
